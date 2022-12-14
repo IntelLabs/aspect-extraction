@@ -1,0 +1,28 @@
+{
+    "tr_phase_1_steps": [600, 1000, 1200],
+    "tr_phase_1_lr": [1e-05, 2e-05, 3e-05],
+    "per_device_train_batch_size": [4, 8],
+    "pos_ex_only": false,
+    "few_shot": true,
+    "lr": -1,
+    "model": "roberta-base",
+    "np_extractors": "pos",
+    "lm_method": "pet",
+    "mlm_prob": 0.15,
+    "per_device_eval_batch_size": 16,
+    "pattern": 0,
+    "max_seq_len": 128,
+    "report_to": "all",
+    "overwrite_cache": true,
+    "save_model": 0,
+    "npe_only": false,
+    "results_dir": "results",
+    "output_dir": "models/model",
+    "ace_using_model": false,
+    "ace_model": "roberta-base",
+    "per_device_unlabeled_batch_size": 8,
+    "tr_phase_2": false,
+    "tr_phase_1_label_loss": true,
+    "tr_phase_1_lm": false
+    
+}
