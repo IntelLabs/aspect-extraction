@@ -10,7 +10,7 @@ This method significantly outperforms the standard supervised training approach 
 First, create a virtual environment for the project and install all the requirments. We recommend conda for managing virtual enviroments.
 
 ```bash
-conda create -n pate python==3.7.9
+conda create -n pate python==3.8
 conda activate pate
 pip install -r requirements.txt
 python -m spacy download en_core_web_lg  # Spacy model used for noun-phrase extraction
