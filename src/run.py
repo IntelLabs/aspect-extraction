@@ -1,3 +1,4 @@
+import argparse
 from builtins import str
 from collections import defaultdict
 import json
@@ -7,7 +8,7 @@ import numpy as np
 from numpy import mean, std
 from itertools import product
 
-from run_method import main as run
+from run_method import run_method
 from datetime import datetime
 
 from utils import Benchmark, verify_and_load_json_dataset
@@ -22,6 +23,8 @@ METRICS = ("precision", "recall", "f1")
 
 bench = Benchmark()
 track = bench.track
+
+SEEDS = (12, 27, 42, 20, 33)
 
 
 def split_sizes():
@@ -121,17 +124,13 @@ def load_data(dataset, pos_ex_only=False):
     return d_label, d_test, d_unlabeled
 
 
-def run_method(hparams: dict=None, seed=42, train=None, dev=None, test=None, unlabeled=None):
+def run_method_with_hparams(dataset: str, hparams: dict=None, seed=42, train=None, dev=None, test=None, unlabeled=None):
     hparams_flat = {**hparams["tune"], **hparams["fixed"]} if "tune" in hparams else hparams
     with open(TMP_HPARAMS_PATH, "w") as f:
         json.dump(hparams_flat, f, indent=4)
 
-    metrics = run(hparams_path=TMP_HPARAMS_PATH,
-                                seed=seed,
-                                train=train,
-                                dev=dev,
-                                test=test,
-                                unlabeled=unlabeled)
+    metrics = run_method(dataset=dataset, hparams_path=TMP_HPARAMS_PATH, seed=seed,\
+        train=train, dev=dev, test=test, unlabeled=unlabeled)
 
     return metrics
 
@@ -141,6 +140,7 @@ class TuneFewShot:
                 seed=42, max_train_labels=1000, sample_sizes: tuple=(32,), start_from=0) -> None:
         self.seed = seed
 
+        self.data = data
         self.max_train_labels = max_train_labels
         self.num_splits = num_splits
         self.sample_sizes = sample_sizes
@@ -180,7 +180,7 @@ class TuneFewShot:
             d_unlabeled = verify_and_load_json_dataset(unlabeled_path)["train"]
         return d_label, d_test, d_unlabeled
 
-    def tune_all(self):
+    def tune_all_samples_sizes(self):
         report = {}
         for sample_size in self.sample_sizes:
             print(f"\n\n Tuning with sample size = {sample_size}... \n\n")
@@ -213,7 +213,7 @@ class TuneFewShot:
             with track(f"hparam set: \n{i + 1} out of {len(self.hparam_space)} hparam_sets"):
                 for i, splits in enumerate(multi_splits):
                     with track(f"Running multi-split {i + 1}/{len(multi_splits)}"):
-                        result = run_method(hparams=h_set,
+                        result = run_method_with_hparams(dataset=self.data, hparams=h_set,
                                     train=splits["train"],
                                     dev=splits["dev"],
                                     unlabeled=self.d_unlabeled)
@@ -245,6 +245,7 @@ class TuneBaseline:
                 seed=42, max_train_labels=1000, sample_sizes: tuple=(32,), start_from=0) -> None:
         self.seed = seed
 
+        self.data = data
         self.max_train_labels = max_train_labels
         self.num_splits = num_splits
         self.sample_sizes = sample_sizes
@@ -284,7 +285,7 @@ class TuneBaseline:
             d_unlabeled = verify_and_load_json_dataset(unlabeled_path)["train"]
         return d_label, d_test, d_unlabeled
 
-    def tune_all(self):
+    def tune_all_samples_sizes(self):
         report = {}
         for sample_size in self.sample_sizes:
             print(f"\n\n Tuning with sample size = {sample_size}... \n\n")
@@ -317,7 +318,7 @@ class TuneBaseline:
             with track(f"hparam set: \n{i + 1} out of {len(self.hparam_space)} hparam_sets"):
                 for i, splits in enumerate(multi_splits):
                     with track(f"Running multi-split {i + 1}/{len(multi_splits)}"):
-                        result = run_method(hparams=h_set,
+                        result = run_method_with_hparams(dataset=self.data, hparams=h_set,
                                             train=splits["train"],
                                             dev=splits["dev"])
 
@@ -349,6 +350,7 @@ class TestFewShot:
         self.sample_sizes = sample_sizes
         self.output_dir = init_output_dir("test_results", data)
         self.seeds = seeds
+        self.data = data
 
         open(self.output_dir / f'seeds_{self.seeds}', 'w')
 
@@ -358,10 +360,9 @@ class TestFewShot:
         with open(self.output_dir / 'hparams.json', 'w') as f:
             json.dump(self.hparams, f, indent=4)
 
-        # pos_ex_only = self.hparams['tune'].get('pos_ex_only', False)
         self.d_label, self.d_test, self.d_unlabeled = load_data(data, pos_ex_only=False)
 
-    def test_all(self):
+    def test_all_samples_sizes(self):
         results = {}
         for sample_size in self.sample_sizes:
             print(f"\n\n Testing with sample size = {sample_size}... \n\n")
@@ -383,7 +384,7 @@ class TestFewShot:
             print(f"\n\n Testing with seed = {seed}... \n\n")
             d_sample_size = self.d_label.shuffle(seed=seed).select(range(sample_size))
             
-            result = run_method(seed=seed,
+            result = run_method_with_hparams(dataset=self.data, seed=seed,
                                 hparams=self.hparams,
                                 train=d_sample_size,
                                 test=self.d_test,
@@ -408,6 +409,7 @@ class TestBaseline:
         self.sample_sizes = sample_sizes
         self.output_dir = init_output_dir("baseline_results", data)
         self.seeds = seeds
+        self.data = data
 
         open(self.output_dir / f'seeds_{self.seeds}', 'w')
 
@@ -417,7 +419,7 @@ class TestBaseline:
         with open(self.output_dir / 'hparams.json', 'w') as f:
             json.dump(self.hparams, f, indent=4)
 
-    def test_all(self):
+    def test_all_samples_sizes(self):
         results = {}
         for sample_size in self.sample_sizes:
             print(f"\n\n Testing baseline with sample size = {sample_size}... \n\n")
@@ -439,7 +441,7 @@ class TestBaseline:
             print(f"\n\n Testing baseline with seed = {seed}... \n\n")
             d_sample_size = self.d_label.shuffle(seed=seed).select(range(sample_size))
 
-            result = run_method(seed=seed,
+            result = run_method_with_hparams(dataset=self.data, seed=seed,
                                 hparams=self.hparams,
                                 train=d_sample_size,
                                 test=self.d_test)
@@ -459,69 +461,72 @@ class TestBaseline:
 def smoke_tune(data):
     TuneFewShot(data=data, hparam_space="smoke_tune.json", num_splits=1,
                 seed=42, max_train_labels=1000, sample_sizes=(16,)) \
-                .tune_all()
+                .tune_all_samples_sizes()
 
 def smoke_tune_base(data):
     TuneBaseline(data=data, hparam_space="smoke_base.json", num_splits=1,
                 seed=42, max_train_labels=1000, sample_sizes=(16,)) \
-                .tune_all()
+                .tune_all_samples_sizes()
 
 def smoke_test(data):
-    TestFewShot(data=data, hparams="smoke.json", sample_sizes=(16,), seeds=(12,)).test_all()
+    TestFewShot(data=data, hparams="smoke.json", sample_sizes=(16,), seeds=(12,)).test_all_samples_sizes()
 
 def smoke_base(data):
     TestBaseline(data=data, hparams="baseline.json", sample_sizes=(16,), seeds=(12,)) \
-                .test_all()
+                .test_all_samples_sizes()
 
-def main():
-    # Usage: python eval.py [CUDA_DEVICE] [DATASET:lap/res/device] [TASK]
-
-    # Change to True For debug:
-    DEBUG = False
-
-    task = sys.argv[1]
-    data_arg = sys.argv[2]
-    cuda_device = sys.argv[3]
-
-    os.environ["CUDA_VISIBLE_DEVICES"] = cuda_device
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    
-    assert task in ("tune", "test", "tune_base", "test_base")
-    assert data_arg in ("lap", "res", "device")
-    assert cuda_device.isnumeric() and len(cuda_device) <= 2
-    
-    data = data_arg
-    seeds = (12, 27, 42, 20, 33)
-
+def run_smoke(task: str, dataset: str) -> None:
     if task == "tune":
-        if DEBUG:
-            smoke_tune(data)
-        else:
-            TuneFewShot(data=data, hparam_space="model.json", num_splits=5,
-                seed=27, max_train_labels=1000, start_from=0)\
-                    .tune_all()
+        smoke_tune(dataset)
 
     if task == "tune_base":
-        if DEBUG:
-            smoke_tune_base(data)
-        else:
-            TuneBaseline(data=data, hparam_space="baseline.json", num_splits=5,
-                seed=27, max_train_labels=1000, start_from=0)\
-                .tune_all()
+        smoke_tune_base(dataset)
 
     if task == "test":
-        if DEBUG:
-            smoke_test(data)
-        else:
-            TestFewShot(data=data, hparams=f"{data}_latest/ex=32.json", seeds=seeds)\
-                .test_all()
+        smoke_test(dataset)
 
-    if task == "base":
-        if DEBUG:
-            smoke_base(data)
-        else:
-            TestBaseline(data=data, hparams=f"{data}_latest/ex=32.json", seeds=seeds)\
-                .test_all()
+    if task == "test_base":
+        smoke_base(dataset)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", choices=("lap", "res", "device"), default="lap")
+    parser.add_argument("--task", choices=("tune", "test", "tune_base", "test_base"), default="test")
+    parser.add_argument("--sample_sizes", type=int, nargs="+", default=(16, 32))
+    parser.add_argument("--cuda_device", type=int, default=0)
+    parser.add_argument("--debug", default=False, action="store_true")
+    args = parser.parse_args()
+    return args
+
+    
+def main():
+    args = parse_args()
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.cuda_device)
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+    if args.debug:
+        run_smoke(args.task, args.dataset)
+
+    else:
+        if args.task == "tune":
+            TuneFewShot(data=args.dataset, hparam_space="model.json", num_splits=5,
+            seed=27, max_train_labels=1000, start_from=0)\
+                .tune_all_samples_sizes()
+
+        if args.task == "tune_base":
+            TuneBaseline(data=args.dataset, hparam_space="baseline.json", num_splits=5,
+            seed=27, max_train_labels=1000, start_from=0)\
+                .tune_all_samples_sizes()
+
+        if args.task == "test":
+            TestFewShot(data=args.dataset, hparams=f"{args.dataset}_latest/ex=32.json", seeds=SEEDS)\
+                .test_all_samples_sizes()
+
+        if args.task == "test_base":
+            TestBaseline(data=args.dataset, hparams=f"{args.dataset}_latest/ex=32.json", seeds=SEEDS)\
+                .test_all_samples_sizes()
 
 
 if __name__ == "__main__":

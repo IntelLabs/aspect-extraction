@@ -773,12 +773,13 @@ class Evaluation:
     def __init__(
         self,
         args,
+        dataset: str,
         seed: int,
         split: str,
         max_samples: dict,
         root: PathLike) -> None:
 
-        self.out_dir = f"{args.results_dir}/{args.dataset}_ex={max_samples['train']}_seed={seed}_%s"
+        self.out_dir = f"{args.results_dir}/{dataset}_ex={max_samples['train']}_seed={seed}_%s"
         self.is_few_shot = args.few_shot
         self.split = split
         self.max_samples = max_samples
@@ -969,3 +970,20 @@ def get_data_collator(is_few_shot, tokenizer):
     else:
         data_collator = default_data_collator
     return data_collator
+
+
+class AddFineTunedPreds:
+
+    def __init__(self, ace_preds) -> None:
+        self.ace_preds = ace_preds
+
+    def add_ace_preds(self, ex):
+
+        all_text, all_tokens, all_tags, ace_preds = [], [], [], []
+        for text, tokens, tags, ace_pred in zip(ex['text'], ex['tokens'], ex['tags'], self.ace_preds):
+            all_text.append(text)
+            all_tokens.append(tokens)
+            all_tags.append(tags)
+            ace_preds.append(ace_pred)
+
+        return dict(text=all_text, tokens=all_tokens, tags=all_tags, ace_preds=ace_preds)

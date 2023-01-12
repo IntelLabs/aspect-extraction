@@ -27,17 +27,16 @@ The `data` folder contains the following pre-processed datasets:
 ## Run Experiments
 
 ```bash
-python src/eval.py [TASK] [DATASET] [CUDA_DEVICE]
+python src/run.py --dataset=[DATASET] --task=[TASK]
 ```
 
 Where:
 - `TASK` can be:
     - `tune` - tune model hyperparameters
-    - `test` - evaluate model using tuned hyperparameters
+    - `test` - train and evaluate model using tuned hyperparameters
     - `tune_base` - tune baseline model hyperparameters
-    - `test_base` - evaluate baseline model using tuned hyperparameters
+    - `test_base` - train and evaluate baseline model using tuned hyperparameters
 - `DATASET` can be `lap`/`rest`/`device` for Laptop, Restaurant and Digital Device
-- `CUDA_DEVICE` is the GPU device to use (0,1,2...)
 
 Tuning and testing tasks are performed according to the FewNLU [[4]](#references) paradigm.
 

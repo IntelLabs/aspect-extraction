@@ -1,3 +1,4 @@
+import os
 from typing import Dict
 import logging
 from torch.nn import CrossEntropyLoss
@@ -78,7 +79,7 @@ def predict(model, args, is_few_shot, test_dataset, split, data_collator, label_
 
 class Trainer:
     def __init__(self, model, args, training_args, train_dataset, unlabeled_dataset,
-            accelerator, tokenizer, train_conf: dict=None) -> None:
+            accelerator, tokenizer, save_path: str, train_conf: dict=None) -> None:
         self.model = model
         self.args = args
         self.tr_args = training_args
@@ -94,6 +95,7 @@ class Trainer:
         self.logging_steps = training_args.logging_steps
         self.label_training = False
         self.per_device_train_batch_size = self.tr_args.per_device_train_batch_size
+        self.save_path = save_path
 
         if train_conf is not None:
             self.lm_training = train_conf.get('lm', False)
@@ -190,10 +192,6 @@ class Trainer:
 
         train_iterator = trange(epochs, desc="Epoch") if use_tqdm else range(epochs)
 
-        # Only show the progress bar once on each machine.
-        # self.progress_bar = tqdm(range(self.tr_args.max_train_steps), disable=not self.accelerator.is_local_main_process,
-        #     miniters=10)
-
         for epoch in train_iterator:
             epoch_iterator = tqdm(self.train_dataloader, desc="Iteration") if use_tqdm else \
                 self.train_dataloader
@@ -259,7 +257,8 @@ class Trainer:
         if self.tr_args.output_dir is not None:
             self.accelerator.wait_for_everyone()
             unwrapped_model = self.accelerator.unwrap_model(self.model)
-            unwrapped_model.save_pretrained(self.tr_args.output_dir, save_function=self.accelerator.save)
+            out_dir = os.path.join(self.tr_args.output_dir, self.save_path)
+            unwrapped_model.save_pretrained(out_dir, save_function=self.accelerator.save)
         
         avg_tr_loss = (tr_loss / global_step if global_step > 0 else -1)
         return logged_losses, avg_tr_loss
