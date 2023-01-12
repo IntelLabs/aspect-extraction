@@ -10,7 +10,7 @@
     "lm_method": "pet",
     "mlm_prob": 0.15,
     "per_device_eval_batch_size": 16,
-    "pattern": 0,
+    "pattern_id": 0,
     "max_seq_len": 128,
     "report_to": "all",
     "overwrite_cache": true,

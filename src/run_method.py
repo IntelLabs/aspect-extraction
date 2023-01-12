@@ -44,10 +44,10 @@ CONF_DIR = ROOT_DIR / 'conf'
 DATA_DIR = ROOT_DIR / 'data'
 
 
-def main(hparams_path: str=None, seed=42, train=None, dev=None, test=None, unlabeled=None):
+def run_method(hparams_path: str=None, seed=42, train=None, dev=None, test=None, unlabeled=None):
 
     parser = HfArgumentParser((Arguments, TrainingArguments))
-    args, training_args = parser.parse_json_file(json_file=hparams_path)
+    args, training_args = parser.parse_json_file(json_file=hparams_path) #, allow_extra_keys=True)
 
     training_args.do_train = train is not None
     training_args.do_eval = dev is not None
@@ -62,10 +62,6 @@ def main(hparams_path: str=None, seed=42, train=None, dev=None, test=None, unlab
     training_args.max_train_steps = args.max_train_steps
     training_args.num_train_epochs = int(training_args.num_train_epochs)
     
-    # if args.super_smoke:
-    #     training_args.max_train_steps = 10
-    #     max_samples = {'train': 20, 'test': 25, 'dev': 15}     
-
     bench = Benchmark()
     track = bench.track
 
@@ -448,6 +444,3 @@ def main(hparams_path: str=None, seed=42, train=None, dev=None, test=None, unlab
 
         print('Run Completed.')
         return all_metrics
-
-if __name__ == "__main__":
-    main()
