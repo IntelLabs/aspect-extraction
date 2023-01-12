@@ -10,7 +10,6 @@
     "max_seq_len": 128,
     "report_to": "all",
     "overwrite_cache": true,
-    "save_model": 0,
     "npe_only": false,
     "results_dir": "results",
     "output_dir": "models/model",

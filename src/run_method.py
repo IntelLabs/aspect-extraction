@@ -24,10 +24,7 @@ from absa_utils import (
     write_P_x_to_file,
     set_up_logging,
     save_tr_loss_plots,
-    log_and_plot_loss
-)
-
-from asp_cand_ext import(
+    log_and_plot_loss,
     AddFineTunedPreds
 )
 
@@ -44,10 +41,10 @@ CONF_DIR = ROOT_DIR / 'conf'
 DATA_DIR = ROOT_DIR / 'data'
 
 
-def run_method(hparams_path: str=None, seed=42, train=None, dev=None, test=None, unlabeled=None):
+def run_method(dataset: str, hparams_path: str=None, seed=42, train=None, dev=None, test=None, unlabeled=None):
 
     parser = HfArgumentParser((Arguments, TrainingArguments))
-    args, training_args = parser.parse_json_file(json_file=hparams_path) #, allow_extra_keys=True)
+    args, training_args = parser.parse_json_file(json_file=hparams_path)
 
     training_args.do_train = train is not None
     training_args.do_eval = dev is not None
@@ -88,7 +85,7 @@ def run_method(hparams_path: str=None, seed=42, train=None, dev=None, test=None,
 
         ############################### Pre-process ###############################
         with track('Pre-process'):
-            proxy = {} #dict(proxies={"https": "http://proxy-chain.intel.com:912"})
+            proxy = {}
 
             with track('----Init tokenizer'):
                 tokenizer = AutoTokenizer.from_pretrained(
@@ -247,7 +244,8 @@ def run_method(hparams_path: str=None, seed=42, train=None, dev=None, test=None,
                             train_dataset=data['labeled_for_ace_training'],
                             unlabeled_dataset=data['lm'], 
                             accelerator=accelerator, 
-                            tokenizer=tokenizer)
+                            tokenizer=tokenizer,
+                            save_path="ace")
 
                             print(f"******* ACE step: sarted fine tuning *******")
                             with track('ACE-Model-Train - Finished'):
@@ -374,7 +372,7 @@ def run_method(hparams_path: str=None, seed=42, train=None, dev=None, test=None,
                             "lr": args.tr_phase_1_lr, "label_loss": args.tr_phase_1_label_loss, "alpha": args.alpha}
                     else:
                         train_conf = None
-                    trainer = Trainer(**training_kwargs, train_conf=train_conf)
+                    trainer = Trainer(**training_kwargs, train_conf=train_conf, save_path="finetune_1")
                     losses, avg_tr_loss = trainer.train()
                     
                     tr_loss_plot = log_and_plot_loss(training_args.logging_steps, losses, avg_tr_loss)
@@ -388,7 +386,7 @@ def run_method(hparams_path: str=None, seed=42, train=None, dev=None, test=None,
                         "lr": args.tr_phase_2_lr, "label_loss": args.tr_phase_2_label_loss}
 
                     with track('----Fine-Tune - Phase 2'):
-                        trainer = Trainer(**training_kwargs, train_conf=train_conf)
+                        trainer = Trainer(**training_kwargs, train_conf=train_conf, save_path="finetune_2")
                         losses, avg_tr_loss_phase_2 = trainer.train()
 
                         tr_loss_plot_phase_2 = log_and_plot_loss(training_args.logging_steps, losses, avg_tr_loss_phase_2)
@@ -419,7 +417,7 @@ def run_method(hparams_path: str=None, seed=42, train=None, dev=None, test=None,
                     all_pred_group, inference_tokens) if args.few_shot else []
 
                 metrics.update(dict(avg_tr_loss=avg_tr_loss, avg_tr_loss_phase_2=avg_tr_loss_phase_2))
-                out_dir = Evaluation(args, seed, split, max_samples, ROOT_DIR).run(metrics, preds, *eval_args)
+                out_dir = Evaluation(args, dataset, seed, split, max_samples, ROOT_DIR).run(metrics, preds, *eval_args)
                 
                 # Log and Write HPARAMS to file
                 hparams_str = f"***** Hyperparams *****\nArguments:\n{json.dumps(args.__dict__, indent=2)}\n\n{training_args}"
