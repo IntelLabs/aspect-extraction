@@ -1,0 +1,11 @@
+{
+  "test_step_1_precision": 0.3377,
+  "test_step_1_recall": 0.8268,
+  "test_step_1_f1": 0.4795,
+  "test_step_1_accuracy": 0.8613,
+  "step_1_overlapping_recall": 0.826783114992722,
+  "test_precision": 0.4027,
+  "test_recall": 0.2358,
+  "test_f1": 0.2974,
+  "test_accuracy": 0.9013
+}

@@ -48,7 +48,7 @@ class Arguments:
     )
 
     tokenizer_name: Optional[str] = field(
-        default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
+        default="roberta-base", metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
     )
     smoke_test: Optional[bool] = field(
         default=False,
@@ -207,5 +207,5 @@ def verify_and_load_json_dataset(path: str):
                 assert isinstance(tag, str)
 
     print("json schema successfully verified.")
-    dataset = load_dataset("json", data_files=path)
+    dataset = load_dataset("json", data_files=path)["train"]
     return dataset

@@ -772,18 +772,14 @@ def calc_bio_metrics(pred, true):
 class Evaluation:
     def __init__(
         self,
-        args,
+        out_dir: str,
         dataset: str,
         seed: int,
         split: str,
-        max_samples: dict,
-        root: PathLike) -> None:
+        num_shot: int) -> None:
 
-        self.out_dir = f"{args.results_dir}/{dataset}_ex={max_samples['train']}_seed={seed}_%s"
-        self.is_few_shot = args.few_shot
+        self.out_dir = f"{out_dir}/{dataset}_ex={num_shot}_seed={seed}_%s"
         self.split = split
-        self.max_samples = max_samples
-        self.root = root
         
     def run(
         self,
@@ -795,18 +791,11 @@ class Evaluation:
         inference_tokens=None
         ) -> None:
 
-        if self.is_few_shot:
-            split = self.split
-            few_shot_metrics, step_1_err_counts, test_err_counts = \
-                self.few_shot_eval(all_gold_bio[split], inference_idx[split], all_pred_group[split], inference_tokens[split], preds=preds)
-            metrics.update(few_shot_metrics)
-        else:
-            step_1_err_counts, test_err_counts = None, None
-            f1_key = f"{self.split}_f1"
-            f1_str = f"{f1_key}={metrics[f1_key]}"
-            self.out_dir = Path(self.out_dir % f1_str)
+        split = self.split
+        few_shot_metrics, step_1_err_counts, test_err_counts = \
+            self.few_shot_eval(all_gold_bio[split], inference_idx[split], all_pred_group[split], inference_tokens[split], preds=preds)
+        metrics.update(few_shot_metrics)
 
-        metrics['test_samples'] = self.max_samples[self.split]
         self.write_metrics(metrics, step_1_err_counts, test_err_counts)
         return self.out_dir
 

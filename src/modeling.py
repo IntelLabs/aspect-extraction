@@ -32,10 +32,10 @@ def predict(model, args, is_few_shot, test_dataset, split, data_collator, label_
     test_dataloader = DataLoader(test_dataset, collate_fn=data_collator, batch_size=args.per_device_eval_batch_size)
     device = accelerator.device
     model.eval()
-    
+
     metric = load_metric("seqeval")
     num_test_steps = int(len(test_dataset) / args.per_device_eval_batch_size)
-    # progress_bar = tqdm(range(num_test_steps))
+
     all_preds = []
 
     with tqdm(range(num_test_steps)) as progress_bar:
