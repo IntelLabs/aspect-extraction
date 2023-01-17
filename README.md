@@ -18,33 +18,34 @@ python -m spacy download en_core_web_lg  # Spacy model used for noun-phrase extr
 
 ### Data
 
-The `data` folder contains the following pre-processed datasets:
+The `datasets` direcory contains the following pre-processed datasets in `.jsonl` format:
 
- - Laptop - from SemEval-2014 and SemEval-2015 [[1,2]](#references)
- - Restaurant - from SemEval-2014 [[1]](#references)
- - Digital Device - from (Hu and Liu, 2004) [[3]](#references)
+ - Laptop (`lap`) - from SemEval-2014 and SemEval-2015 [[1,2]](#references)
+ - Restaurant (`rest`) - from SemEval-2014 [[1]](#references)
+ - Digital Device (`device`) - from (Hu and Liu, 2004) [[3]](#references)
 
-## Run Experiments
+New datasets may be added to this directory, with the same format used in existing datasets.
+
+## Train
 
 ```bash
-python src/run.py --dataset=[DATASET] --task=[TASK]
+python src/run_fewshot.py --do_train --dataset=rest --config=smoke.json
 ```
 
-Where:
-- `TASK` can be:
-    - `tune` - tune model hyperparameters
-    - `test` - train and evaluate model using tuned hyperparameters
-    - `tune_base` - tune baseline model hyperparameters
-    - `test_base` - train and evaluate baseline model using tuned hyperparameters
-- `DATASET` can be `lap`/`rest`/`device` for Laptop, Restaurant and Digital Device
+Optional arguments:
 
-Tuning and testing tasks are performed according to the FewNLU [[4]](#references) paradigm.
-
+ - `--config` - name of config json file store in `config` directory. Defaults to `ex=32.json`.
+ - `--model_savename` - path to save the trained model. Defaults to `models/finetuned`.
+ - `--inference_model` - model file to load for inference. Defaults to `models/finetuned`.
+ - `--do_train` - perform few-shot training on using the train set. Save the trained model to `--model_savename`.
+ - `--do_predict` - perform inference on the test set. Save predictions to the `/out` directory.
+ - `--do_eval` - perform evaluation on the test set. Requires a test file with labels. Save metrics to the `/out` directory.
+ - `--simulate_fewshot` - if enabled, take a small sample from a large train set to simulate a few-shot training setup. 
+ - `--sample_size` - the sample size for `--simulate_fewshot`. Defaults to 64.
 
 ## Output
 
-A timestamped directory with full results is saved to `eval/test_results`. 
-This directory contains `test_results.txt` with a table of avereage Precision/Recall/F1 for each training sample size.
+A timestamped directory with metrics and/or predictions is saved to the `/out` directory.
 
 ## Citation
 
