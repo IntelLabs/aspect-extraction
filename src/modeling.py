@@ -28,12 +28,11 @@ logging.basicConfig(
     level=logging.INFO,
 )
     
-def predict(model, args, is_few_shot, test_dataset, split, data_collator, label_list, accelerator):
+def predict(model, args, test_dataset, data_collator, accelerator):
     test_dataloader = DataLoader(test_dataset, collate_fn=data_collator, batch_size=args.per_device_eval_batch_size)
     device = accelerator.device
     model.eval()
 
-    metric = load_metric("seqeval")
     num_test_steps = int(len(test_dataset) / args.per_device_eval_batch_size)
 
     all_preds = []
@@ -42,40 +41,18 @@ def predict(model, args, is_few_shot, test_dataset, split, data_collator, label_
         for step, batch in enumerate(test_dataloader):
             batch = {k: v.cpu().to(device=device) for k, v in batch.items()}
             with torch.no_grad():
-                input_kwargs = dict(labeled_batch=batch) if is_few_shot else batch
+                input_kwargs = dict(labeled_batch=batch)
 
                 # Forward call
                 outputs = model(**input_kwargs)
 
             preds = outputs.logits
-            
-            if not is_few_shot:
-                preds = preds.argmax(dim=-1)
-
             preds = accelerator.gather(preds)
-
-            if not is_few_shot:
-                labels = batch["labels"]
-                labels_gathered = accelerator.gather(labels)
-                preds, refs = get_labels(accelerator.device, label_list, preds, labels_gathered)
-                metric.add_batch(
-                    predictions=preds,
-                    references=refs,
-                )  # predictions and references are expected to be a nested list of labels, not label_ids
-                all_preds.extend(preds)
-            else:
-                all_preds.extend(preds)
-
+            all_preds.extend(preds)
             progress_bar.update(1)
             
-        eval_metric = {}
-        if not is_few_shot:
-            eval_metric = compute_metrics(metric, split)
-            accelerator.print(f"\nEvaluation Metrics:", eval_metric)
-        else:
-            all_preds = torch.stack(all_preds)
-
-        return all_preds, eval_metric
+        all_preds = torch.stack(all_preds)
+        return all_preds
 
 class Trainer:
     def __init__(self, model, args, training_args, train_dataset, unlabeled_dataset,

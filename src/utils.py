@@ -196,15 +196,21 @@ def verify_and_load_json_dataset(path: str):
     with open(path) as jsonl_f:
         for line in jsonl_f:
             data = json.loads(line)
-            assert all(k in data.keys() for k in ("tokens", "tags", "text"))
-            assert isinstance(data["tokens"], list)
-            assert isinstance(data["tags"], list)
-            assert isinstance(data["text"], str)
-            assert len(data["tags"]) == len(data["tokens"])
+            assert not any(k not in ("tokens", "tags", "text") for k in data.keys())
+            if "tokens" in data:
+                assert isinstance(data["tokens"], list)
+                for token in data["tokens"]:
+                    assert isinstance(token, str)
 
-            for tok, tag in zip(data["tokens"], data["tags"]):
-                assert isinstance(tok, str)
-                assert isinstance(tag, str)
+            if "tags" in data:
+                assert isinstance(data["tags"], list)
+                for tag in data["tags"]:
+                    assert isinstance(tag, str)
+
+            assert isinstance(data["text"], str)
+
+            if "tags" in data and "tokens" in data:
+                assert len(data["tags"]) == len(data["tokens"])
 
     print("json schema successfully verified.")
     dataset = load_dataset("json", data_files=path)["train"]

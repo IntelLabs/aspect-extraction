@@ -535,7 +535,9 @@ class AbsaPVP:
             else:
                    ace_preds = [0] * len(examples['text'])     
 
-            for text, tokens, tags, ace_pred in zip(examples['text'], examples['tokens'], examples['tags'], ace_preds):
+            dummy_tags = [None] * len(examples['text'])
+            for text, tokens, tags, ace_pred in \
+                zip(examples['text'], examples['tokens'], examples.get("tags", dummy_tags), ace_preds):
                                 
                 if split == 'test' and self.ace_using_model:
                     if len(ace_pred)>len(tokens):
@@ -642,7 +644,7 @@ class AbsaPVP:
             mask_token = self.mask
             text = self.shortenable(text)
         else:
-            mask_token = "Yes" if mask_token_label is 1 else "No"
+            mask_token = "Yes" if mask_token_label == 1 else "No"
 
         if self.pattern_id == 0: ####
             return [text, ". So, does the review in the previous sentence focus on", asp_candidate, "?", mask_token]
@@ -780,10 +782,21 @@ class Evaluation:
 
         self.out_dir = f"{out_dir}/{dataset}_ex={num_shot}_seed={seed}_%s"
         self.split = split
-        
+
+    def predict_only(
+        self,
+        preds=None,
+        inference_idx=None,
+        all_pred_group=None,
+        inference_tokens=None
+        ) -> None:
+
+        split = self.split
+
+        return self.few_shot_eval(inference_idx[split], all_pred_group[split], inference_tokens[split], preds)
+
     def run(
         self,
-        metrics: dict,
         preds=None,
         all_gold_bio=None,
         inference_idx=None,
@@ -792,19 +805,19 @@ class Evaluation:
         ) -> None:
 
         split = self.split
-        few_shot_metrics, step_1_err_counts, test_err_counts = \
-            self.few_shot_eval(all_gold_bio[split], inference_idx[split], all_pred_group[split], inference_tokens[split], preds=preds)
-        metrics.update(few_shot_metrics)
 
-        self.write_metrics(metrics, step_1_err_counts, test_err_counts)
+        few_shot_metrics, step_1_err_counts, test_err_counts = \
+            self.few_shot_eval(inference_idx[split], all_pred_group[split], inference_tokens[split], preds, all_gold_bio=all_gold_bio[split])
+
+        self.write_metrics(few_shot_metrics, step_1_err_counts, test_err_counts)
         return self.out_dir
 
-    def few_shot_eval(self, all_gold_bio, candidate_idx, all_pred_group, test_tokens, preds=None):
+    def few_shot_eval(self, candidate_idx, all_pred_group, test_tokens, preds, all_gold_bio=None):
         # Create bio lists in the same dimensions as gold_bio
         all_step_1_bio, all_step_1_bio_a, all_step_1_bio_b, all_pred_bio = [], [], [], []
-        for gold_bio in all_gold_bio:
+        for tok_bio in test_tokens:
             for bio_list in all_step_1_bio, all_step_1_bio_a, all_step_1_bio_b, all_pred_bio:
-                bio_list.append(['O'] * len(gold_bio))
+                bio_list.append(['O'] * len(tok_bio))
 
         if preds is None:
             preds = [0] * len(candidate_idx)
@@ -820,6 +833,9 @@ class Evaluation:
             # Final Eval
             if pred == 1:
                 fill_asp_bio(all_pred_bio[ex_i], start, end)
+
+        if all_gold_bio is None:
+            return all_pred_bio
 
         step_1_metrics = calc_bio_metrics(all_step_1_bio, all_gold_bio)
         metrics = {f'{self.split}_step_1_{k}': v for k, v in step_1_metrics.items()}

@@ -1,13 +1,12 @@
 import argparse
 from datetime import datetime
+import json
 import logging
 import os
 from pathlib import Path
 from builtins import str
-from collections import defaultdict
 import shutil
-from numpy import mean, std
-
+import numpy as np
 from utils import Benchmark, verify_and_load_json_dataset
 
 
@@ -68,10 +67,10 @@ class PATETrainer:
         self.training_args.num_train_epochs = int(self.training_args.num_train_epochs)
         self.data = data
 
-        self.num_shot = len(data["train"])
+        self.num_shot = len(data["train"]) if "train" in data else "NA"
         self.dataset_name = cli_args.dataset
-        self.output_dir = self.init_output_dir(self.dataset_name)
-        shutil.copyfile(CONFIG_DIR / cli_args.config, self.output_dir / 'config.json')
+        self.out_dir = self.init_output_dir(self.dataset_name)
+        shutil.copyfile(CONFIG_DIR / cli_args.config, self.out_dir / 'config.json')
         assert data is not None
         self.track = Benchmark().track
 
@@ -81,11 +80,7 @@ class PATETrainer:
         output_root = ROOT_DIR / self.training_args.output_dir
         output_dir = output_root / (datetime.now().strftime("%d.%m-%H:%M:%S") + "_" + data)
         os.makedirs(output_dir)
-        self.out_dir = output_dir
-        latest_dir = output_root / f"{data}_latest"
-        if os.path.exists(latest_dir):
-            os.remove(latest_dir)
-        os.symlink(output_dir, latest_dir)
+
         return output_dir
     
     def preprocess(self):
@@ -107,7 +102,8 @@ class PATETrainer:
             self.all_gold_bio, self.inference_tokens = {}, {}
 
             if self.data['test'] is not None:
-                self.all_gold_bio['test'] = self.data['test']['tags']
+                if 'tags' in self.data['test'].column_names:
+                    self.all_gold_bio['test'] = self.data['test']['tags']
                 self.inference_tokens['test'] = self.data['test']['tokens']
                 
             with self.track('----Tokenize + Extract Features'):
@@ -122,29 +118,31 @@ class PATETrainer:
                     batched=True,
                     batch_size = 10000,
                     num_proc=self.args.preprocessing_num_workers,
-                    remove_columns=['tokens', 'tags', 'text'],
+                    remove_columns=['tokens', 'text', 'tags'],
                     load_from_cache_file=not self.args.overwrite_cache)   
 
     def preprocess_train(self):
+        # self.map_kwargs["remove_columns"].append("tags")
         self.data['labeled'] = self.data['train'].map(function=self.pvp.preprocess_train, **self.map_kwargs)
         self.pvp.ex_count = 0
 
     def preprocess_test(self):
         self.inference_idx, self.all_pred_group = {}, {}
 
-        def preprocess_for_inference(split):               
-            # Start preprocess
-            kwargs = self.map_kwargs
-            self.data[split] = self.data[split].map(function=self.pvp.preprocess_test, **kwargs)    
+        # Start preprocess
+        kwargs = self.map_kwargs
+        if "tags" not in self.data["test"].column_names and "tags" in kwargs["remove_columns"]:
+            kwargs["remove_columns"].remove("tags")
+        
+        self.data["test"] = self.data["test"].map(function=self.pvp.preprocess_test, **kwargs)    
 
-            # Pop metadata
-            self.pvp.ex_count = 0
-            self.inference_idx[split] = self.data[split]['cand_idx']
-            self.all_pred_group[split] = self.data[split]['pred_group']
-            self.data[split] = self.data[split].remove_columns(['cand_idx', 'pred_group'])
-            self.data[split] = self.data[split].remove_columns(['P_x'])
+        # Pop metadata
+        self.pvp.ex_count = 0
+        self.inference_idx["test"] = self.data["test"]['cand_idx']
+        self.all_pred_group["test"] = self.data["test"]['pred_group']
+        self.data["test"] = self.data["test"].remove_columns(['cand_idx', 'pred_group'])
+        self.data["test"] = self.data["test"].remove_columns(['P_x'])
 
-        preprocess_for_inference('test')
 
     def load_model(self):
         with self.track('Load Model'):
@@ -156,6 +154,7 @@ class PATETrainer:
 
     def train(self):
         with self.track('Train'):
+            assert "train" in self.data
             self.preprocess_train()
             self.load_model()
 
@@ -168,54 +167,58 @@ class PATETrainer:
 
             trainer.train()
 
-    # def predict(self):
-    #     with self.track('Predict'):
-    #         self.preprocess_test()
-    #         self.load_model()
-
-    def eval(self):
-        with self.track('Eval'):
+    def predict(self):
+        with self.track('predict()'):
+            assert "test" in self.data
             self.preprocess_test()
             self.args.model_name_or_path = self.inference_model
             self.load_model()
 
-        def run_inference(split):
-            with self.track(f'Inference on {split}'):
-                logger.info(f"***** Running inference on {split} split *****")
+            # Uncomment if you get OOM
+            # self.training_args.eval_accumulation_steps = 20
+            # self.training_args.per_device_eval_batch_size = 2
+            
+            preds = predict(
+                model=self.model,
+                args=self.training_args,
+                test_dataset=self.data["test"],
+                data_collator=default_data_collator,
+                accelerator=self.accelerator
+            )
 
-                preds, metrics = None, {}
+            evaluation = Evaluation(self.out_dir, self.dataset_name, self.seed, "test", self.num_shot)
+            bio_preds = evaluation.predict_only(preds, self.inference_idx, \
+                self.all_pred_group, self.inference_tokens)
+            self.write_predictions(bio_preds)
 
-                # TODO: Try Removing this:
-                self.training_args.eval_accumulation_steps = 20
-                self.training_args.per_device_eval_batch_size = 2
-                
-                preds, metrics = predict(
-                    model=self.model,
-                    args=self.training_args,
-                    is_few_shot=self.args.few_shot,
-                    test_dataset=self.data[split],
-                    split=split,
-                    data_collator=default_data_collator,
-                    label_list=self.label_list,
-                    accelerator=self.accelerator
-                )
+    def write_predictions(self, bio_preds) -> None:
+        with open(f"{DATA_DIR}/{self.dataset_name}_test.json") as test_input:
+            with open(self.out_dir / "predictions.json", "w") as out_f:
+                for input_row, preds in zip(test_input, bio_preds):
+                    output_row = json.loads(input_row)
+                    output_row["preds"] = preds
+                    out_f.write(json.dumps(output_row) + "\n")
 
-                eval_args = (self.all_gold_bio, self.inference_idx, \
-                    self.all_pred_group, self.inference_tokens) if self.args.few_shot else []
+    def eval(self):
+        with self.track('eval()'):
+            assert "test" in self.data
+            self.preprocess_test()
+            self.args.model_name_or_path = self.inference_model
+            self.load_model()
+            
+            preds = predict(
+                model=self.model,
+                args=self.training_args,
+                test_dataset=self.data["test"],
+                data_collator=default_data_collator,
+                accelerator=self.accelerator
+            )
 
-                Evaluation(self.out_dir, self.dataset_name, self.seed, split, self.num_shot)\
-                    .run(metrics, preds, *eval_args)
-                
-                return metrics
+            evaluation = Evaluation(self.out_dir, self.dataset_name, self.seed, "test", self.num_shot)
 
+            evaluation.run(preds, self.all_gold_bio, self.inference_idx, \
+                self.all_pred_group, self.inference_tokens)
 
-        results = run_inference('test')
-
-        scores = defaultdict(list)
-        for metric in METRICS:
-            scores[metric].append(results[f"test_{metric}"])
-        agg_scores = {f"{m}_{f.__name__}": f(scores[m]) for f in (mean, std) for m in METRICS}
-        return agg_scores
 
 def load_json_dataset(ds_name: str):
     dataset = {}
@@ -234,6 +237,8 @@ def load_json_dataset(ds_name: str):
 
 def create_fewshot_dataset(ds_name, seed, sample_size):
     dataset = load_json_dataset(ds_name)
+
+    logger.error("'--simulate_fewshot' requires a train file.")
     dataset["train"] = dataset["train"].shuffle(seed=seed).select(range(sample_size))
     return dataset
 
@@ -244,11 +249,12 @@ def parse_args():
     parser.add_argument("--cuda_device", type=int, default=0)
     parser.add_argument("--do_train", default=False, action="store_true")
     parser.add_argument("--do_eval", default=False, action="store_true")
+    parser.add_argument("--do_predict", default=False, action="store_true")
     parser.add_argument("--model_savename", type=str, default=MODELS_DIR / "finetuned")
     parser.add_argument("--inference_model", type=str, default=MODELS_DIR / "finetuned")
 
     parser.add_argument("--simulate_fewshot", default=False, action="store_true")
-    parser.add_argument("--sample_size", type=int, default=16)
+    parser.add_argument("--sample_size", type=int, default=64)
 
     args = parser.parse_args()
     return args
@@ -271,6 +277,10 @@ def main():
 
     if cli_args.do_eval:
         trainer.eval()
+
+    if cli_args.do_predict:
+
+        trainer.predict()
 
 if __name__ == "__main__":
     main()

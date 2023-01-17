@@ -1,7 +1,7 @@
 {
     "seed": 12,
     "pos_ex_only": false,
-    "tr_phase_1_steps": 1000,
+    "tr_phase_1_steps": 10,
     "tr_phase_1_lr": 3e-05,
     "few_shot": true,
     "np_extractors": "pos",
