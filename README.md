@@ -1,7 +1,7 @@
 # Pattern-based Aspect Term Extraction
 
 
-This repository contains the code for the paper: ["Few-Shot Aspect Extraction using Prompt Training"](https://neurips2022-enlsp.github.io/papers/paper_17.pdf).
+This repository contains the code for the paper: ["Few-Shot Aspect Extraction using Prompt Training"](https://neurips2022-enlsp.github.io/papers/paper_19.pdf).
 
 This method significantly outperforms the standard supervised training approach in few-shot setups on three datasets.
 
@@ -56,7 +56,7 @@ This directory contains `test_results.txt` with a table of avereage Precision/Re
       Wasserblat, Moshe and
       Bar, Kfir",
     journal="Advances in Neural Information Processing Systems, 2022.",
-    url="https://neurips2022-enlsp.github.io/papers/paper_17.pdf",
+    url="https://neurips2022-enlsp.github.io/papers/paper_19.pdf",
     year = "2022"
 }
 ```
