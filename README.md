@@ -26,22 +26,22 @@ The `datasets` direcory contains the following pre-processed datasets in `.jsonl
 
 New datasets may be added to this directory, with the same format used in existing datasets.
 
-## Train
+## Run Train / Predict
 
 ```bash
-python src/run_fewshot.py --do_train --dataset=rest --config=smoke.json
+python src/run_fewshot.py --do_train --dataset=rest
 ```
 
 Optional arguments:
 
- - `--config` - name of config json file store in `config` directory. Defaults to `ex=32.json`.
- - `--model_savename` - path to save the trained model. Defaults to `models/finetuned`.
- - `--inference_model` - model file to load for inference. Defaults to `models/finetuned`.
- - `--do_train` - perform few-shot training on using the train set. Save the trained model to `--model_savename`.
- - `--do_predict` - perform inference on the test set. Save predictions to the `/out` directory.
- - `--do_eval` - perform evaluation on the test set. Requires a test file with labels. Save metrics to the `/out` directory.
- - `--simulate_fewshot` - if enabled, take a small sample from a large train set to simulate a few-shot training setup. 
- - `--sample_size` - the sample size for `--simulate_fewshot`. Defaults to 64.
+ - `--config` - Name of config json file store in `config` directory. Defaults to `ex=32.json` use `smoke.json` for a sanity check.
+ - `--model_savename` - Path to save the trained model. Defaults to `models/finetuned`.
+ - `--inference_model` - Model file to load for inference. Defaults to `models/finetuned`.
+ - `--do_train` - Perform few-shot training on using the train set. Save the trained model to `--model_savename`.
+ - `--do_predict` - Perform inference on the test set. Save predictions to the `/out` directory.
+ - `--do_eval` - Perform evaluation on the test set. Requires a test file with labels. Save metrics to the `/out` directory.
+ - `--simulate_fewshot` - If enabled, take a small sample from a large train set to simulate a few-shot training setup. 
+ - `--sample_size` - The sample size for `--simulate_fewshot`. Defaults to 64.
 
 ## Output
 
